@@ -86,6 +86,7 @@ def face_detect(images):
         x2 = min(image.shape[1], rect[2] + padx2)
 
         results.append([x1, y1, x2, y2])
+        break
 
     print('face detect time:', time() - s)
 
