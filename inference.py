@@ -5,6 +5,7 @@ import platform
 import subprocess
 
 import cv2
+import face_recognition
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -69,11 +70,32 @@ def get_smoothened_boxes(boxes, T):
         boxes[i] = np.mean(window, axis=0)
     return boxes
 
+
+img = cv2.imread("../MAN.png")
+rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+img_encoding = face_recognition.face_encodings(rgb_img)[0]
+
+img2 = cv2.imread("../WOMAN.png")
+rgb_img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+img_encoding2 = face_recognition.face_encodings(rgb_img2)[0]
+
+known_face_encodings = [
+    img_encoding,
+    img_encoding2
+]
+known_face_names = [
+    "MAN",
+    "WOMAN"
+]
+
+
 def face_detect(images):
     results = []
     pady1, pady2, padx1, padx2 = args.pads
 
     s = time()
+
+    face_rect0(images)
 
     for image, rect in zip(images, face_rect(images)):
         if rect is None:
@@ -86,7 +108,44 @@ def face_detect(images):
         x2 = min(image.shape[1], rect[2] + padx2)
 
         results.append([x1, y1, x2, y2])
-        break
+
+        ###########################################################
+        # cur_encoding = face_recognition.face_encodings(image)
+        # temp_res = face_recognition.compare_faces([img_encoding, img_encoding2], cur_encoding)
+
+        # if face_recognition.compare_faces([img_encoding], cur_encoding[0]):
+        #     cv2.putText(image, "GUY", (x1, y1 - 10), cv2.FONT_HERSHEY_DUPLEX, 1, (200, 0, 0), 2)
+          
+        # if face_recognition.compare_faces([img_encoding2], cur_encoding[0]):
+        #     cv2.putText(image, "WOMAN", (x1, y1 - 10), cv2.FONT_HERSHEY_DUPLEX, 1, (200, 0, 0), 2)
+
+        face_locations = face_recognition.face_locations(image)
+        face_encodings = face_recognition.face_encodings(image, face_locations)
+
+        face_names = []
+        cur_name = ""
+        for face_encoding in face_encodings:
+            # See if the face is a match for the known face(s)
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+            name = "Unknown"
+
+            # # If a match was found in known_face_encodings, just use the first one.
+            if True in matches:
+                first_match_index = matches.index(True)
+                name = known_face_names[first_match_index]
+
+            # Or instead, use the known face with the smallest distance to the new face
+            # face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+            # best_match_index = np.argmin(face_distances)
+            # if matches[best_match_index]:
+            #     name = known_face_names[best_match_index]
+
+            face_names.append(name)
+            cur_name = name
+
+        cv2.putText(image, cur_name, (x1, y1 - 10), cv2.FONT_HERSHEY_DUPLEX, 1, (200, 0, 0), 2)
+        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 200), 2)
+        ###########################################################
 
     print('face detect time:', time() - s)
 
@@ -302,6 +361,56 @@ def do_load(checkpoint_path):
 
     print("Models loaded")
 
+def face_rect0(images):
+    prev_ret = None
+
+    for image in images:
+        face_locations = face_recognition.face_locations(image)
+        face_encodings = face_recognition.face_encodings(image, face_locations)
+
+        face_names = []
+        for face_encoding in face_encodings:
+            # See if the face is a match for the known face(s)
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+            name = "Unknown"
+
+            # # If a match was found in known_face_encodings, just use the first one.
+            # if True in matches:
+            #     first_match_index = matches.index(True)
+            #     name = known_face_names[first_match_index]
+
+            # Or instead, use the known face with the smallest distance to the new face
+            face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+            best_match_index = np.argmin(face_distances)
+            if matches[best_match_index]:
+                name = known_face_names[best_match_index]
+
+            face_names.append(name)
+
+        # Display the results
+        for (top, right, bottom, left), name in zip(face_locations, face_names):
+            # # Scale back up face locations since the frame we detected in was scaled to 1/4 size
+            # top *= 4
+            # right *= 4
+            # bottom *= 4
+            # left *= 4
+
+            # Draw a box around the face
+            cv2.rectangle(image, (left, top), (right, bottom), (0, 0, 255), 2)
+
+            # Draw a label with a name below the face
+            font = cv2.FONT_HERSHEY_DUPLEX
+            # cv2.rectangle(image, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
+            # cv2.putText(image, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+
+            cv2.rectangle(image, (left, top), (right, bottom), (0, 0, 200), 2)
+            cv2.putText(image, name, (left, top - 10), font, 1, (200, 0, 0), 2)
+
+            if name == "WOMAN":
+                box_list = [left, top, right, bottom]
+                box = np.array(box_list)
+                prev_ret = tuple(map(int, box))
+        yield prev_ret
 
 face_batch_size = 64 * 8
 
@@ -316,6 +425,7 @@ def face_rect(images):
                 box, landmarks, score = faces[0]
                 prev_ret = tuple(map(int, box))
             yield prev_ret
+            
 
 
 if __name__ == '__main__':
