@@ -71,21 +71,45 @@ def get_smoothened_boxes(boxes, T):
     return boxes
 
 
-img = cv2.imread("../MAN.png")
+img = cv2.imread("../man 1.png")
 rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-img_encoding = face_recognition.face_encodings(rgb_img)[0]
+img_encoding = face_recognition.face_encodings(rgb_img, num_jitters=2, model="large")[0]
 
-img2 = cv2.imread("../WOMAN.png")
+img2 = cv2.imread("../man 2.png")
 rgb_img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
-img_encoding2 = face_recognition.face_encodings(rgb_img2)[0]
+img_encoding2 = face_recognition.face_encodings(rgb_img2, num_jitters=2, model="large")[0]
+
+img3 = cv2.imread("../woman 1.png")
+rgb_img3 = cv2.cvtColor(img3, cv2.COLOR_BGR2RGB)
+img_encoding3 = face_recognition.face_encodings(rgb_img3, num_jitters=2, model="large")[0]
+
+img4 = cv2.imread("../woman 2.png")
+rgb_img4 = cv2.cvtColor(img4, cv2.COLOR_BGR2RGB)
+img_encoding4 = face_recognition.face_encodings(rgb_img4, num_jitters=2, model="large")[0]
+
+img5 = cv2.imread("../man 1-2.png")
+rgb_img5 = cv2.cvtColor(img5, cv2.COLOR_BGR2RGB)
+img_encoding5 = face_recognition.face_encodings(rgb_img5, num_jitters=2, model="large")[0]
+
+img6 = cv2.imread("../man 2-2.png")
+rgb_img6 = cv2.cvtColor(img6, cv2.COLOR_BGR2RGB)
+img_encoding6 = face_recognition.face_encodings(rgb_img6, num_jitters=2, model="large")[0]
 
 known_face_encodings = [
     img_encoding,
-    img_encoding2
+    img_encoding2,
+    img_encoding3,
+    img_encoding4,
+    img_encoding5,
+    img_encoding6
 ]
 known_face_names = [
-    "MAN",
-    "WOMAN"
+    "man 1",
+    "man 2",
+    "woman 1",
+    "woman 2",
+    "man 1",
+    "man 2"
 ]
 
 
@@ -366,12 +390,12 @@ def face_rect0(images):
 
     for image in images:
         face_locations = face_recognition.face_locations(image)
-        face_encodings = face_recognition.face_encodings(image, face_locations)
+        face_encodings = face_recognition.face_encodings(image, face_locations, num_jitters=2, model="large")
 
         face_names = []
         for face_encoding in face_encodings:
             # See if the face is a match for the known face(s)
-            matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.4)
             name = "Unknown"
 
             # # If a match was found in known_face_encodings, just use the first one.
@@ -387,6 +411,7 @@ def face_rect0(images):
 
             face_names.append(name)
 
+        has_ret = False
         # Display the results
         for (top, right, bottom, left), name in zip(face_locations, face_names):
             # # Scale back up face locations since the frame we detected in was scaled to 1/4 size
@@ -406,7 +431,12 @@ def face_rect0(images):
             cv2.rectangle(image, (left, top), (right, bottom), (0, 0, 200), 2)
             cv2.putText(image, name, (left, top - 10), font, 1, (200, 0, 0), 2)
 
-            if name == "WOMAN":
+            if name == "man 2" or name == "woman 1":
+                box_list = [left, top, right, bottom]
+                box = np.array(box_list)
+                prev_ret = tuple(map(int, box))
+                has_ret = True
+            elif not has_ret:
                 box_list = [left, top, right, bottom]
                 box = np.array(box_list)
                 prev_ret = tuple(map(int, box))
