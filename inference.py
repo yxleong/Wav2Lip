@@ -108,8 +108,6 @@ known_face_names = [
     "man 2",
     "woman 1",
     "woman 2",
-    "man 1",
-    "man 2"
 ]
 
 
