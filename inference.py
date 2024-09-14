@@ -386,61 +386,50 @@ def do_load(checkpoint_path):
     print("Models loaded")
 
 def face_rect0(images):
-    prev_ret = None
+    prev_ret = None  # Initialize the previous return value (bounding box)
 
     for image in images:
+        # Detect face locations in the current frame
         face_locations = face_recognition.face_locations(image)
         face_encodings = face_recognition.face_encodings(image, face_locations, num_jitters=2, model="large")
 
         face_names = []
         for face_encoding in face_encodings:
-            # See if the face is a match for the known face(s)
+            # Compare detected face encodings with known face encodings
             matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.4)
             name = "Unknown"
 
-            # # If a match was found in known_face_encodings, just use the first one.
+            # If a match is found, use the first match's name
             if True in matches:
                 first_match_index = matches.index(True)
                 name = known_face_names[first_match_index]
 
-            # Or instead, use the known face with the smallest distance to the new face
-            # face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
-            # best_match_index = np.argmin(face_distances)
-            # if matches[best_match_index]:
-            #     name = known_face_names[best_match_index]
-
+            # Append the identified name to the list of face names
             face_names.append(name)
 
-        has_ret = False
-        # Display the results
-        for (top, right, bottom, left), name in zip(face_locations, face_names):
-            # # Scale back up face locations since the frame we detected in was scaled to 1/4 size
-            # top *= 4
-            # right *= 4
-            # bottom *= 4
-            # left *= 4
+        has_ret = False  # Variable to track if the desired face is found in this frame
 
-            # Draw a box around the face
+        # Loop through all detected faces in the frame
+        for (top, right, bottom, left), name in zip(face_locations, face_names):
+            # Draw bounding box around the face
             cv2.rectangle(image, (left, top), (right, bottom), (0, 0, 255), 2)
 
-            # Draw a label with a name below the face
+            # Display the detected name
             font = cv2.FONT_HERSHEY_DUPLEX
-            # cv2.rectangle(image, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
-            # cv2.putText(image, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
-
-            cv2.rectangle(image, (left, top), (right, bottom), (0, 0, 200), 2)
             cv2.putText(image, name, (left, top - 10), font, 1, (200, 0, 0), 2)
 
+            # If the face detected is "man 2" or "woman 1", prioritize its bounding box
             if name == "man 2" or name == "woman 1":
                 box_list = [left, top, right, bottom]
                 box = np.array(box_list)
-                prev_ret = tuple(map(int, box))
-                has_ret = True
-            elif not has_ret:
+                prev_ret = tuple(map(int, box))  # Store the bounding box for the face
+                has_ret = True  # Set flag to indicate face is found
+            elif not has_ret:  # If no specific face is found yet, use the current face
                 box_list = [left, top, right, bottom]
                 box = np.array(box_list)
-                prev_ret = tuple(map(int, box))
-        yield prev_ret
+                prev_ret = tuple(map(int, box))  # Store the bounding box for the face
+
+        yield prev_ret  # Yield the bounding box for the current frame
 
 face_batch_size = 64 * 8
 
