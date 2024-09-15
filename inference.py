@@ -1,11 +1,8 @@
 import argparse
 import math
 import os
-import platform
 import subprocess
-
 import cv2
-import face_recognition
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -13,7 +10,6 @@ from tqdm import tqdm
 import audio
 from models import Wav2Lip
 from batch_face import RetinaFace
-from time import time
 
 # Argument parser
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos using Wav2Lip models')
@@ -22,7 +18,7 @@ parser.add_argument('--checkpoint_path', type=str, required=True, help='Path to 
 parser.add_argument('--face', type=str, required=True, help='Filepath of video/image that contains the face(s) to use')
 parser.add_argument('--audio', type=str, required=True, help='Filepath of audio or video file to extract audio from')
 parser.add_argument('--outfile', type=str, default='results/result_voice.mp4', help='Output path for the result video')
-parser.add_argument('--static', type=bool, default=False, help='Use the first video frame for inference if True')
+parser.add_argument('--static', action='store_true', help='Use the first video frame for inference if True')
 parser.add_argument('--fps', type=float, default=25.0, help='FPS (used only for static image input)')
 parser.add_argument('--pads', nargs='+', type=int, default=[0, 10, 0, 0], help='Padding (top, bottom, left, right)')
 parser.add_argument('--wav2lip_batch_size', type=int, default=128, help='Batch size for Wav2Lip model inference')
@@ -49,7 +45,7 @@ def extract_frames_from_video(video_path, out_height=480, resize_factor=1, rotat
     video_stream = cv2.VideoCapture(video_path)
     fps = video_stream.get(cv2.CAP_PROP_FPS)
     print('Reading video frames...')
-    
+
     frames = []
     while True:
         ret, frame = video_stream.read()
@@ -76,7 +72,7 @@ def load_audio_as_mel(audio_path):
     """Loads audio and converts it to mel spectrogram."""
     wav = audio.load_wav(audio_path, 16000)
     mel = audio.melspectrogram(wav)
-    
+
     if np.isnan(mel.reshape(-1)).sum() > 0:
         raise ValueError('Mel spectrogram contains NaN values.')
     return mel
@@ -114,21 +110,22 @@ def face_detect(images, detector, batch_size, pads, nosmooth):
         
         x1, y1, x2, y2 = max(0, box[0] - padx1), max(0, box[1] - pady1), min(images[i].shape[1], box[2] + padx2), min(images[i].shape[0], box[3] + pady2)
         results.append([x1, y1, x2, y2])
-    
+
     if not nosmooth:
         results = get_smoothened_boxes(np.array(results), T=5)
-    
+
     return [[image[y1:y2, x1:x2], (y1, y2, x1, x2)] for image, (x1, y1, x2, y2) in zip(images, results)]
 
 def main():
     args = parser.parse_args()
+
     # Load Wav2Lip model and face detector
     model = load_model(args.checkpoint_path)
     detector = RetinaFace(gpu_id=0, model_path="checkpoints/mobilenet.pth", network="mobilenet")
 
     # Determine if input is image or video
     if os.path.isfile(args.face):
-        if args.face.split('.')[-1] in ['jpg', 'jpeg', 'png']:
+        if args.face.split('.')[-1].lower() in ['jpg', 'jpeg', 'png']:
             args.static = True
             full_frames = [cv2.imread(args.face)]
         else:
@@ -136,26 +133,27 @@ def main():
     else:
         raise ValueError('Invalid face file path')
 
-    if not args.static:
+    if args.static:
         fps = args.fps
 
     # Audio processing
     if not args.audio.endswith('.wav'):
-        subprocess.check_call(['ffmpeg', '-y', '-i', args.audio, 'temp/temp.wav'])
-        args.audio = 'temp/temp.wav'
+        temp_audio_path = 'temp/temp.wav'
+        subprocess.check_call(['ffmpeg', '-y', '-i', args.audio, temp_audio_path])
+        args.audio = temp_audio_path
 
     mel = load_audio_as_mel(args.audio)
     mel_chunks = [mel[:, i:i + 16] for i in range(0, len(mel[0]), int(80 / fps))]
-    
+
     print(f"Total mel chunks: {len(mel_chunks)}")
 
     # Align frames and mel chunks
     full_frames = full_frames[:len(mel_chunks)]
-    
-    # Run Wav2Lip
+
+    # Placeholder for inference logic
     face_batch_size = args.wav2lip_batch_size
     for img_batch, mel_batch, frames, coords in tqdm(datagen(full_frames, mel_chunks, args, detector, model), total=int(np.ceil(len(mel_chunks)/face_batch_size))):
-        pass  # Inference logic (same as original)
+        pass  # Add the inference logic here
 
 if __name__ == '__main__':
     main()
