@@ -456,6 +456,39 @@ def face_rect(images):
                 prev_ret = tuple(map(int, box))
             yield prev_ret
             
+def datagen(full_frames, mel_chunks, args, detector, model):
+    """Generator function that yields image batches and corresponding mel chunks."""
+    img_batch_size = args.wav2lip_batch_size
+    face_batch_size = img_batch_size
+    mel_idx_multiplier = 80 / args.fps
+    
+    # Face detection and cropping
+    for i, (img, mel_chunk) in enumerate(zip(full_frames, mel_chunks)):
+        # Prepare image batches
+        img_batch = full_frames[i:i + face_batch_size]
+        if len(img_batch) == 0:
+            continue
+
+        # Detect faces in the frames
+        detected_faces = face_detect(img_batch, detector, face_batch_size, args.pads, args.nosmooth)
+        
+        # If no faces are detected, continue
+        if len(detected_faces) == 0:
+            continue
+
+        # Crop and process detected faces
+        face_crops, coords = zip(*detected_faces)
+        face_crops = np.array([cv2.resize(c, (96, 96)) for c in face_crops])
+
+        # Prepare mel spectrogram batches
+        mel_chunk_batch = np.array(mel_chunk).astype(np.float32)
+        mel_chunk_batch = np.expand_dims(mel_chunk_batch, axis=0)  # For batch dimension
+        
+        # Convert to tensor for model input
+        face_crops = torch.FloatTensor(np.transpose(face_crops, (0, 3, 1, 2))).to(device) / 255.
+        mel_chunk_batch = torch.FloatTensor(mel_chunk_batch).to(device)
+
+        yield face_crops, mel_chunk_batch, img_batch, coords
 
 
 if __name__ == '__main__':
