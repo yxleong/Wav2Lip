@@ -113,7 +113,7 @@ known_face_names = [
 ]
 
 
-def face_detect(images):
+def face_detect(img_batch, detector, face_batch_size, pads, nosmooth):
     results = []
     pady1, pady2, padx1, padx2 = args.pads
 
