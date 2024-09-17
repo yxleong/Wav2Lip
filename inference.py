@@ -71,27 +71,27 @@ def get_smoothened_boxes(boxes, T):
     return boxes
 
 
-img = cv2.imread("../man 1.png")
+img = cv2.imread("/content/Wav2Lip/man 1.png")
 rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 img_encoding = face_recognition.face_encodings(rgb_img, num_jitters=2, model="large")[0]
 
-img2 = cv2.imread("../man 2.png")
+img2 = cv2.imread("/content/Wav2Lip/man 2.png")
 rgb_img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
 img_encoding2 = face_recognition.face_encodings(rgb_img2, num_jitters=2, model="large")[0]
 
-img3 = cv2.imread("../woman 1.png")
+img3 = cv2.imread("/content/Wav2Lip/woman 1.png")
 rgb_img3 = cv2.cvtColor(img3, cv2.COLOR_BGR2RGB)
 img_encoding3 = face_recognition.face_encodings(rgb_img3, num_jitters=2, model="large")[0]
 
-img4 = cv2.imread("../woman 2.png")
+img4 = cv2.imread("/content/Wav2Lip/woman 2.png")
 rgb_img4 = cv2.cvtColor(img4, cv2.COLOR_BGR2RGB)
 img_encoding4 = face_recognition.face_encodings(rgb_img4, num_jitters=2, model="large")[0]
 
-img5 = cv2.imread("../man 1-2.png")
+img5 = cv2.imread("/content/Wav2Lip/man 1-2.png")
 rgb_img5 = cv2.cvtColor(img5, cv2.COLOR_BGR2RGB)
 img_encoding5 = face_recognition.face_encodings(rgb_img5, num_jitters=2, model="large")[0]
 
-img6 = cv2.imread("../man 2-2.png")
+img6 = cv2.imread("/content/Wav2Lip/man 2-2.png")
 rgb_img6 = cv2.cvtColor(img6, cv2.COLOR_BGR2RGB)
 img_encoding6 = face_recognition.face_encodings(rgb_img6, num_jitters=2, model="large")[0]
 
