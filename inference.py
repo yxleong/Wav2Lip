@@ -115,118 +115,71 @@ known_face_names = [
 
 def face_detect(img_batch, detector, face_batch_size, pads, nosmooth):
     results = []
-    pady1, pady2, padx1, padx2 = args.pads
+    pady1, pady2, padx1, padx2 = pads
 
     s = time()
 
-    # face_rect0(images)
+    # Use the face detection model
+    for image in img_batch:
+        # Adjust face detection code if needed
+        faces = detector.detect_faces(image)  # Adjust this line as needed based on detector
 
-    for image, rect in zip(images, face_rect0(images)):
-        if rect is None:
+        if len(faces) == 0:
             cv2.imwrite('temp/faulty_frame.jpg', image) # check this frame where the face was not detected.
             raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
 
-        y1 = max(0, rect[1] - pady1)
-        y2 = min(image.shape[0], rect[3] + pady2)
-        x1 = max(0, rect[0] - padx1)
-        x2 = min(image.shape[1], rect[2] + padx2)
+        detected_faces = []
+        for face in faces:
+            box, landmarks, score = face
+            y1, x1, y2, x2 = box
+            y1 = max(0, y1 - pady1)
+            y2 = min(image.shape[0], y2 + pady2)
+            x1 = max(0, x1 - padx1)
+            x2 = min(image.shape[1], x2 + padx2)
 
-        results.append([x1, y1, x2, y2])
+            detected_faces.append([x1, y1, x2, y2])
 
-        # ###########################################################
-        # # cur_encoding = face_recognition.face_encodings(image)
-        # # temp_res = face_recognition.compare_faces([img_encoding, img_encoding2], cur_encoding)
-
-        # # if face_recognition.compare_faces([img_encoding], cur_encoding[0]):
-        # #     cv2.putText(image, "GUY", (x1, y1 - 10), cv2.FONT_HERSHEY_DUPLEX, 1, (200, 0, 0), 2)
-          
-        # # if face_recognition.compare_faces([img_encoding2], cur_encoding[0]):
-        # #     cv2.putText(image, "WOMAN", (x1, y1 - 10), cv2.FONT_HERSHEY_DUPLEX, 1, (200, 0, 0), 2)
-
-        # face_locations = face_recognition.face_locations(image)
-        # face_encodings = face_recognition.face_encodings(image, face_locations)
-
-        # face_names = []
-        # cur_name = ""
-        # for face_encoding in face_encodings:
-        #     # See if the face is a match for the known face(s)
-        #     matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
-        #     name = "Unknown"
-
-        #     # # If a match was found in known_face_encodings, just use the first one.
-        #     if True in matches:
-        #         first_match_index = matches.index(True)
-        #         name = known_face_names[first_match_index]
-
-        #     # Or instead, use the known face with the smallest distance to the new face
-        #     # face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
-        #     # best_match_index = np.argmin(face_distances)
-        #     # if matches[best_match_index]:
-        #     #     name = known_face_names[best_match_index]
-
-        #     face_names.append(name)
-        #     cur_name = name
-
-        # cv2.putText(image, cur_name, (x1, y1 - 10), cv2.FONT_HERSHEY_DUPLEX, 1, (200, 0, 0), 2)
-        # cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 200), 2)
-        # ###########################################################
+        results.append(detected_faces)
 
     print('face detect time:', time() - s)
 
-    boxes = np.array(results)
-    if not args.nosmooth: boxes = get_smoothened_boxes(boxes, T=5)
-    results = [[image[y1: y2, x1:x2], (y1, y2, x1, x2)] for image, (x1, y1, x2, y2) in zip(images, boxes)]
-
+    if not nosmooth:
+        results = get_smoothened_boxes(results, T=5)
     return results
 
 
-def datagen(frames, mels):
-    img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
+def datagen(full_frames, mel_chunks, args, detector, model):
+    """Generator function that yields image batches and corresponding mel chunks."""
+    img_batch_size = args.wav2lip_batch_size
+    mel_idx_multiplier = 80 / args.fps
+    
+    # Face detection and cropping
+    for i, (img, mel_chunk) in enumerate(zip(full_frames, mel_chunks)):
+        # Prepare image batches
+        img_batch = full_frames[i:i + img_batch_size]
+        if len(img_batch) == 0:
+            continue
 
-    if args.box[0] == -1:
-        if not args.static:
-            face_det_results = face_detect(frames) # BGR2RGB for CNN face detection
-        else:
-            face_det_results = face_detect([frames[0]])
-    else:
-        print('Using the specified bounding box instead of face detection...')
-        y1, y2, x1, x2 = args.box
-        face_det_results = [[f[y1: y2, x1:x2], (y1, y2, x1, x2)] for f in frames]
+        # Detect faces in the frames
+        detected_faces = face_detect(img_batch, detector, img_batch_size, args.pads, args.nosmooth)
+        
+        # If no faces are detected, continue
+        if len(detected_faces) == 0:
+            continue
 
-    for i, m in enumerate(mels):
-        idx = 0 if args.static else i%len(frames)
-        frame_to_save = frames[idx].copy()
-        face, coords = face_det_results[idx].copy()
+        # Crop and process detected faces
+        face_crops, coords = zip(*detected_faces)
+        face_crops = np.array([cv2.resize(c, (96, 96)) for c in face_crops])
 
-        face = cv2.resize(face, (args.img_size, args.img_size))
+        # Prepare mel spectrogram batches
+        mel_chunk_batch = np.array(mel_chunk).astype(np.float32)
+        mel_chunk_batch = np.expand_dims(mel_chunk_batch, axis=0)  # For batch dimension
+        
+        # Convert to tensor for model input
+        face_crops = torch.FloatTensor(np.transpose(face_crops, (0, 3, 1, 2))).to(device) / 255.
+        mel_chunk_batch = torch.FloatTensor(mel_chunk_batch).to(device)
 
-        img_batch.append(face)
-        mel_batch.append(m)
-        frame_batch.append(frame_to_save)
-        coords_batch.append(coords)
-
-        if len(img_batch) >= args.wav2lip_batch_size:
-            img_batch, mel_batch = np.asarray(img_batch), np.asarray(mel_batch)
-
-            img_masked = img_batch.copy()
-            img_masked[:, args.img_size//2:] = 0
-
-            img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
-            mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
-
-            yield img_batch, mel_batch, frame_batch, coords_batch
-            img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
-
-    if len(img_batch) > 0:
-        img_batch, mel_batch = np.asarray(img_batch), np.asarray(mel_batch)
-
-        img_masked = img_batch.copy()
-        img_masked[:, args.img_size//2:] = 0
-
-        img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
-        mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
-
-        yield img_batch, mel_batch, frame_batch, coords_batch
+        yield face_crops, mel_chunk_batch, img_batch, coords
 
 mel_step_size = 16
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
